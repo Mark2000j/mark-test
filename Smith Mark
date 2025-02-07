@@ -1,0 +1,77 @@
+
+const bitcore = require("bitcore-lib");
+const axios = require("axios");
+
+let walletA = {
+    addr: "mrTvuGK236qX8YT2qMToCypQVtKLao8VwL",
+    privateKey: "cVzgfgZLoEF1VNhQ1YpvZC2PRY4AHLQ8BhDU95R6ee6WrSaCjpE9"
+}
+ let walletB = {
+    addr: "mjSLAYMgvwQr8ctXkuEuHckp92wcNhjA9f",
+    privateKey: "cSaoKeJv2g2C6yJckZQepP8PRxzjzcHfx9KV6EPSKh3Eps9ycALX"
+}
+
+
+
+
+
+
+function sendBTC(fromAddress, toAddress, privateKey, amount) {
+
+
+const network = "BTCTEST"
+
+
+ axios.get(`https://sochain.com/api/v2/get_tx_unspent/${network}/${fromAddress}`).then(firstResponse => {
+        let inputs = [];
+        let utxos = firstResponse.data.data.txs;
+
+let totalAmountAvailable = 0;
+let inputCount = 0;
+
+for (const element of utxos) {
+let utxo = {}
+utxo.satoshis = Math.floor(Number(element.value) * 100000000)
+utxo.script = element.script_hex 
+utxo.address = firstResponse.data.data.address
+utxo.txid = element.txid 
+utxo.outputIndex = element.output_no
+
+totalAmountAvailable += utxo.satoshis
+inputCount += 1
+
+inputs.push(utxo);
+        }
+
+
+const transaction = new bitcore.Transaction()
+const satoshiToSend = amount * 100000000 
+let outputCount = 2
+
+
+const transactionSize = inputCount * 180 + outputCount * 34 + 10 - inputCount
+let fee = transactionSize * 33
+
+if (totalAmountAvailable - satoshiToSend - fee < 0) { 
+throw new Error("Insufficient funds")
+ }
+
+
+transaction.from(inputs)
+        transaction.to(toAddress, satoshiToSend)
+        transaction.change(fromAddress)
+        transaction.fee(Math.round(fee))
+        transaction.sign(privateKey)
+
+        const serializedTransaction = transaction.serialize()
+
+
+ axios({method: "POST", url: `https://sochain.com/api/v2/send_tx/${network}`, data: {tx_hex: serializedTransaction},})
+        .then(result => {
+            console.log(result.data.data)
+        })
+
+    })
+}
+
+sendBTC(fromAddress = walletA.addr, toAddress = walletB.addr, privateKey = walletA.privateKey, amount = 0.001)
